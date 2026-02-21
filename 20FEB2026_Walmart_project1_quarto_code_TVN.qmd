@@ -1,0 +1,150 @@
+---
+title: "Walmart Project"
+author: "Tien V Nguyen"
+format: docx
+editor: visual
+---
+
+## Running Code
+
+In the following code chunk, load all the libraries you will need:
+
+```{r}
+library(tidyverse)
+library(fixest)
+library (rio)
+library(vtable)
+library(dplyr)
+```
+
+Linking to data sheet.
+
+```{r}
+project1 <- read.csv("~/ECON 5300/Project1/Walmart_Sales.csv")
+```
+
+### **1.Background and Motivation**
+
+Understanding the impact of temperature variation on Walmart’s weekly sales is an important empirical question. To investigate this relationship, data were collected from 45 Walmart stores covering the period from February 2010 through October 2012.
+
+In addition to weekly sales and average temperature, several other variables were included to better control for external factors that may influence sales. These variables include the regional unemployment rate, the consumer price index (CPI), the week of sales (recorded in dd-mm-yyyy format), and the store identification number.
+
+### **2. Data**
+
+\
+The dataset consists of weekly sales from 45 Walmart stores spanning February 2010 through October 2012, totaling 6,435 observations.
+
+![](images/clipboard-869222247.png){width="456"}
+
+**Figure 1**: Model visualization.
+
+Based on the collection dates, the data were grouped by season. According to U.S. meteorological classifications, January to March is defined as Winter, April to June as Spring, July to September as Summer, and October to December as Fall.
+
+Seasonality was expected to influence both holiday frequency and unemployment. Since different seasons contain varying numbers of holidays that may affect sales patterns, the Holiday variable was excluded under the assumption that seasonal indicators could capture its effect. Although unemployment may fluctuate across seasons ^(1)^, particularly during spring and summer hiring periods, it was retained in the model because it is expected to have independent effects on sales and broader economic conditions, including its association with CPI.
+
+Fuel Price was also excluded due to its strong positive relationship with the Consumer Price Index (CPI) ^(2).^ As higher inflation is typically associated with increased fuel prices, including CPI in the model may sufficiently capture the variation explained by fuel prices, thereby reducing concerns of multicollinearity.
+
+The relationships among the variables were structured under the following assumptions. CPI may influence weekly sales through its impact on consumer purchasing power, as higher inflation can alter household spending behavior, including grocery expenditures. CPI is also closely related to fuel prices. Increases in fuel prices, whether driven by market conditions or energy-related policies, may reduce fuel consumption and transportation activity. In the long run, reduced fuel consumption could contribute to lower greenhouse gas emissions, which are associated with temperature patterns. While this channel is likely to operate gradually rather than immediately, it provides a theoretical basis for considering the indirect linkage between fuel prices, broader economic conditions, and temperature variation.
+
+Additionally, seasonal factors directly affect temperature and labor market conditions, influencing unemployment rates. Higher unemployment may reduce aggregate consumer spending, thereby lowering weekly sales.
+
+Lastly, the correlation matrix was run between all the chosen variables to ensure there was no multicollinearity among the independent variables.
+
+```{r}
+#Running correlation matrix.
+numeric_cols<- c('Weekly_Sales','Temperature','CPI','Unemployment')
+cor_matrix <- round(cor(project1[ , numeric_cols], use = "complete.obs"),2)
+print(cor_matrix)
+```
+
+```{r}
+#Doing demeaned for each variables.
+project1 <- project1 %>%
+  group_by(Store) %>%
+  mutate(Temperature_poly = Temperature^2, 
+         Temperature_log= log(Temperature), 
+         Weekly_Sales_log= log(Weekly_Sales),
+         Temperature_dm=Temperature- mean(Temperature),
+         Temperature_poly_dm=Temperature_poly- mean(Temperature_poly),
+         Temperature_log_dm=Temperature_log- mean(Temperature_log),
+         Weekly_Sales_log_dm=Weekly_Sales_log-mean(Weekly_Sales_log),
+         Weekly_Sales_dm= Weekly_Sales - mean(Weekly_Sales),
+         CPI_dm=CPI-mean(CPI),
+         Unemployment_dm=Unemployment -mean(Unemployment))
+```
+
+### **3, Models**
+
+This report estimates two regression models.
+
+In Model 1, a fixed-effects regression including store effects is estimated to examine the relationship between temperature and weekly sales without additional control variables. The objective is to assess the direct effect of temperature on weekly sales, independent of other store characteristics. Based on multiple graphical analyses exploring different functional forms, the logarithmic transformation of weekly sales appears to provide a better fit than the alternative specifications (Figure 2).
+
+```{r}
+#figure 2: Running plots to find out best regression model for model 1
+
+ggplot(project1, aes(x = Temperature_poly_dm, y = Weekly_Sales_dm)) +geom_point() +labs(x = "Temperature^2 (fixed effect)", y = "Weekly Sale") 
+ggplot(project1, aes(x = Temperature_dm, y = Weekly_Sales_dm)) +geom_point() +labs(x = "Temperature (fixed effect)", y = "Weekly Sale") 
+ggplot(project1, aes(x = Temperature_log_dm, y = Weekly_Sales_dm)) +geom_point() +labs(x = "log(Temperature) (demeaned by fixed effect)", y = "Weekly Sale") 
+ggplot(project1, aes(x = 
+Temperature_dm, y = Weekly_Sales_log_dm)) +geom_point() +labs(x = "Temperature (fixed effect)", y = " log(Weekly Sale)") 
+
+```
+
+In Model 2, the logarithmic transformation of weekly sales is retained. In addition to temperature, other control variables are included to examine how these characteristics contribute to differences in sales within each store (Figure 3).
+
+```{r}
+#figure 3: Running plot to check on the best regression model for model 2
+
+ggplot(project1, aes(x = Temperature_dm+ CPI_dm+ Unemployment_dm, y = Weekly_Sales_log_dm)) +geom_point() +labs(x = "Temperatue,CPI, and Unemployment (fixed effect)", y = " log(Weekly Sale)") 
+
+```
+
+### **4. Implications**
+
+The results from both models consistently indicate that higher temperatures are associated with lower weekly sales across the 6,435 observations.
+
+In Model 1, since the coefficient is small in magnitude, it can be interpreted as an approximate percentage change. Within a store, a unit increase in temperature is associated with an average decrease of  0.05% in weekly sales. This relationship is statistically significant at the 5% level. (Otherwise, it can be interpreted as 0.01 unit increase in temperature is associated with 0.05% decrease in Weekly Sales)
+
+In Model 2, the coefficient in temperature remains negative and statistically significant at the 1% level. Since the dependent variable is in logarithmic form and the coefficient is small in magnitude, the estimate can be interpreted approximately as a percentage change. So, within a store, a one-unit increase in temperature is associated with a 0.11% decrease in weekly sales, holding seasonal indicators, CPI, unemployment constant (or within a store, 0.01 unit increase in temperature is associated with 0.0011% decrease in weekly sales).
+
+Seasonal indicators also show significant differences relative to the omitted category (Fall). Within a store, average weekly sales are lower by roughly 3.97% in Spring, 4.35% in Summer, and 9.77% in Winter compared to Fall. This relationship is statistically significant at the 1% level.
+
+CPI and unemployment both have negative estimated coefficients in Model 2; however, neither coefficient is statistically significant at conventional levels. This suggests that while the estimated direction aligns with theoretical expectations, there is insufficient statistical evidence to confirm their independent effects on weekly sales in this specification.
+
+Lastly, the R² and within R² values increase from 0.9572 to 0.9604 and from 0.00375 to 0.0776, respectively, from Model 1 to Model 2. This indicates that adding additional control variables improves the explanatory power of the model, particularly in terms of within-store variation in weekly sales.
+
+Overall, the findings support the hypothesis that lower temperatures are associated with higher weekly sales. Colder weather likely encourages consumers to stay at home and stock up on groceries, purchase additional clothing (such as extra layers), and spend more on fuel for heating. The negative relationship between temperature and weekly sales remains statistically significant after controlling for additional variables. Therefore, higher temperatures are associated with lower weekly spending.
+
+```{r}
+#Combining month and assigning them for different seasons. Also, making season becomes factor variables.
+project1 <- project1 %>%mutate(Date = dmy(Date),   month = month(Date),
+                               season = case_when(month %in% 1:3  ~ "Winter",
+                                                  month %in% 4:6  ~ "Spring",
+                                                  month %in% 7:9  ~ "Summer",
+                                                  month %in% 10:12 ~ "Fall"))
+
+project1 <- project1 %>%mutate(season = factor(season))
+
+```
+
+```{r}
+#Runing regression for model 1 and model 2
+model1<-feols(log(Weekly_Sales)~ Temperature|Store,vcov=~Store, data= project1 )
+
+model2<-feols(log(Weekly_Sales)~ season+ Temperature+ CPI+ Unemployment | Store, vcov=~Store, data= project1 )
+
+etable(model1,model2)
+summary(model1)
+summary(model2)
+
+```
+
+4.  **Limitations**
+
+The survey covers only a two-year period and includes a limited number of explanatory variables. Important factors such as store size, local weather conditions, and population characteristics were not available, which may limit the explanatory power of the model.
+
+### **5. Sources**
+
+1\. Fiveable. (2024, July 31). Seasonal Unemployment – AP Macroeconomics. https://fiveable.me/key-terms/ap-macro/seasonal-unemployment.
+
+2\. Kpodar, K., & Liu, B. (2022). *The distributional implications of the impact of fuel price increases on inflation*. *Energy Economics, 108*, 105909. https://doi.org/10.1016/j.eneco.2022.105909
